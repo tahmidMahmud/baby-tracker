@@ -128,12 +128,19 @@
          </button>`
       : `<button class="action-btn sleep wide" id="btn-sleep"><span class="emoji">😴</span>Start Sleep</button>`;
 
-    const feedBtn = running.feed
-      ? `<button class="action-btn running feed-running" id="btn-feed">
-           <span class="emoji">🍼</span>
-           <span class="timer-display" data-since="${running.feed.startedAt}" data-base="${running.feed.baseSec || 0}">…</span>
-           <span>${running.feed.side === 'left' ? 'Left' : 'Right'} · tap for options</span>
-         </button>`
+    const rf = running.feed;
+    const feedBtn = rf
+      ? (rf.paused
+        ? `<button class="action-btn running feed-running" id="btn-feed">
+             <span class="emoji">⏸️</span>
+             <span class="timer-display">${fmtDur((rf.baseSec || 0) * 1000)}</span>
+             <span>Paused (${rf.side}) · tap for options</span>
+           </button>`
+        : `<button class="action-btn running feed-running" id="btn-feed">
+             <span class="emoji">🍼</span>
+             <span class="timer-display" data-since="${rf.startedAt}" data-base="${rf.baseSec || 0}">…</span>
+             <span>${rf.side === 'left' ? 'Left' : 'Right'} · tap for options</span>
+           </button>`)
       : `<button class="action-btn feed" id="btn-feed"><span class="emoji">🍼</span>Feed</button>`;
 
     view.innerHTML = `
@@ -238,22 +245,39 @@
       });
     } else {
       const f = running.feed;
-      const curSideSec = Math.floor((Date.now() - new Date(f.startedAt)) / 1000);
+      // While paused nothing is accruing; banked totals live in left/rightSec
+      const curSideSec = f.paused ? 0 : Math.floor((Date.now() - new Date(f.startedAt)) / 1000);
       const otherSide = f.side === 'left' ? 'right' : 'left';
+      const thisSideTotal = (f[f.side + 'Sec'] || 0) + curSideSec;
       openSheet(`
-        <h3>Feeding — ${f.side} side</h3>
-        <div class="subtitle">This side: ${fmtDur(curSideSec * 1000)}
+        <h3>Feeding — ${f.side} side${f.paused ? ' (paused)' : ''}</h3>
+        <div class="subtitle">This side: ${fmtDur(thisSideTotal * 1000)}
           ${f[otherSide + 'Sec'] ? ` · ${otherSide}: ${fmtDur(f[otherSide + 'Sec'] * 1000)}` : ''}</div>
+        <button class="btn secondary" id="pause-feed">${f.paused ? '▶️ Resume feed' : '⏸️ Pause (burp / clean-up)'}</button>
         <button class="btn secondary" id="switch-side">Switch to ${otherSide}</button>
         <button class="btn" id="end-feed">End feed</button>
         <button class="btn danger" id="cancel-feed">Discard</button>
       `);
+      document.getElementById('pause-feed').addEventListener('click', () => {
+        if (f.paused) {
+          Store.setRunning('feed', { ...f, paused: false, startedAt: new Date().toISOString() });
+        } else {
+          const upd = { ...f };
+          upd[f.side + 'Sec'] = (upd[f.side + 'Sec'] || 0) + curSideSec;
+          upd.baseSec = (upd.leftSec || 0) + (upd.rightSec || 0);
+          upd.paused = true;
+          upd.startedAt = null;
+          Store.setRunning('feed', upd);
+        }
+        closeSheet();
+      });
       document.getElementById('switch-side').addEventListener('click', () => {
         const upd = { ...f };
         upd[f.side + 'Sec'] = (upd[f.side + 'Sec'] || 0) + curSideSec;
         upd.side = otherSide;
         upd.startedAt = new Date().toISOString();
         upd.baseSec = (upd.leftSec || 0) + (upd.rightSec || 0);
+        upd.paused = false; // switching sides implies the feed is going again
         Store.setRunning('feed', upd);
         closeSheet();
       });
