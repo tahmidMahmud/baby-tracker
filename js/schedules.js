@@ -86,6 +86,39 @@ const Schedules = (() => {
 
   const ENGINES = { tcb: TCB, huckleberry: HB };
 
+  // Primary sources backing each bracket (verified 2026-07-24)
+  const SRC = {
+    tcbWW: ['Wake windows chart', 'https://www.takingcarababies.com/blogs/sleep-basics/wake-windows-and-baby-sleep'],
+    tcbNewborn: ['Newborn schedule', 'https://www.takingcarababies.com/blogs/sleep-schedules/newborn-sleep-schedule'],
+    tcb43: ['4→3 nap transition', 'https://www.takingcarababies.com/blogs/naps/4-to-3-nap-transition'],
+    tcbNaps: ['Nap schedules 5-24 mo', 'https://www.takingcarababies.com/blogs/sleep-schedules/nap-schedules-5-months-to-24-months'],
+    tcb32: ['3→2 nap transition', 'https://www.takingcarababies.com/blogs/naps/3-to-2-nap-transition'],
+    tcb12: ['12-month schedule', 'https://www.takingcarababies.com/blogs/sleep-schedules/12-month-old-sleep-schedule'],
+    hbYear: ['First-year sleep guide', 'https://huckleberrycare.com/blog/first-year-of-sleep-expectations'],
+    hb5: ['5-month schedule', 'https://huckleberrycare.com/blog/5-month-old-sleep-schedule-and-development'],
+    hb32: ['3→2 nap transition', 'https://huckleberrycare.com/blog/3-to-2-nap-transition'],
+    hb12: ['12-month schedule', 'https://huckleberrycare.com/blog/12-month-old-sleep-schedule-and-development'],
+    hbTrans: ['Nap transitions', 'https://huckleberrycare.com/blog/nap-transitions-when-they-occur-and-how-to-handle-them'],
+  };
+  // per-bracket source keys, same order as each engine's brackets array
+  TCB.srcs = [
+    ['tcbWW', 'tcbNewborn'], ['tcbWW', 'tcbNewborn'], ['tcbWW'],
+    ['tcbWW', 'tcb43'], ['tcbWW', 'tcbNaps'], ['tcbWW', 'tcbNaps', 'tcb32'],
+    ['tcbWW', 'tcbNaps'], ['tcbWW', 'tcbNaps', 'tcb12'],
+  ];
+  HB.srcs = [
+    ['hbYear'], ['hbYear'], ['hbYear', 'hb5'], ['hbYear'],
+    ['hbYear', 'hb32', 'hbTrans'], ['hbYear', 'hbTrans'], ['hbYear', 'hb12'],
+  ];
+
+  function sourcesFor(engineId, ageWeeks) {
+    const engine = ENGINES[engineId];
+    if (!engine || !engine.srcs) return [];
+    let i = engine.brackets.findIndex(b => ageWeeks < b.maxWeeks);
+    if (i < 0) i = engine.brackets.length - 1;
+    return (engine.srcs[i] || []).map(k => ({ label: SRC[k][0], url: SRC[k][1] }));
+  }
+
   // Typical nap length (minutes) by bracket index — used only for forecasting.
   // Derived from each brand's day-sleep goals (e.g. TCB 5-7mo: 3-4h over 3
   // naps ≈ 70m/nap); newborn naps assumed shorter.
@@ -220,5 +253,5 @@ const Schedules = (() => {
     return Object.values(ENGINES).map(e => ({ id: e.id, name: e.name }));
   }
 
-  return { suggest, forecast, napLenFor, engineList, bracketFor, ENGINES };
+  return { suggest, forecast, napLenFor, sourcesFor, engineList, bracketFor, ENGINES };
 })();

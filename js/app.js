@@ -239,6 +239,11 @@
             <div class="guide-row"><span>Bedtime</span><b>${hourStr(br.bedtime[0])} – ${hourStr(br.bedtime[1])}</b></div>
             ${perNap}
             ${br.note ? `<div class="guide-note">${esc(br.note)}</div>` : ''}
+            ${(() => {
+              const srcs = Schedules.sourcesFor(en.id, weeks);
+              return srcs.length ? `<div class="guide-links">Sources: ${srcs.map(s =>
+                `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.label)}</a>`).join(' · ')}</div>` : '';
+            })()}
           </div>`;
       }).join('') + `
         <div class="engine-note" style="text-align:left;margin-top:4px">
