@@ -5,6 +5,8 @@ next-nap suggestions from two selectable methodologies (Taking Cara Babies /
 Huckleberry-style — see [docs/research.md](docs/research.md) for the verified
 numbers and sources).
 
+🎬 **[Watch the feature demo (1:43)](demo/baby-tracker-demo.mp4)**
+
 ## Run locally
 
 ```bash
