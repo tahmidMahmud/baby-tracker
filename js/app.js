@@ -135,7 +135,7 @@
             ${sug.napsExpected} naps/day · bedtime ${fmtTime(sug.bedtimeRange[0])}–${fmtTime(sug.bedtimeRange[1])}
           </div>
           ${sug.note ? `<div class="engine-note">${esc(sug.note)}</div>` : ''}
-          ${sug.personalized ? `<div class="engine-note">✨ Personalized from your baby's logged wake windows</div>` : ''}
+          ${sug.personalized ? `<div class="engine-note">${Icon('sparkle', 'ic-inline')} Personalized from your baby's logged wake windows</div>` : ''}
           ${!lastWake ? `<div class="engine-note">Log a sleep so I know the last wake-up.</div>` : ''}
         </div>`;
     } else if (w === null) {
@@ -144,26 +144,26 @@
 
     const sleepBtn = running.sleep
       ? `<button class="action-btn running wide" id="btn-sleep">
-           <span class="emoji">😴</span>
+           ${Icon(running.sleep.kind === 'night' ? 'nightMoon' : 'moon', 'ic-lg')}
            <span class="timer-display" data-since="${running.sleep.startedAt}">…</span>
            <span>Tap to end ${running.sleep.kind}</span>
          </button>`
-      : `<button class="action-btn sleep wide" id="btn-sleep"><span class="emoji">😴</span>Start Sleep</button>`;
+      : `<button class="action-btn sleep wide" id="btn-sleep">${Icon('moon', 'ic-lg')}Start Sleep</button>`;
 
     const rf = running.feed;
     const feedBtn = rf
       ? (rf.paused
         ? `<button class="action-btn running feed-running" id="btn-feed">
-             <span class="emoji">⏸️</span>
+             ${Icon('pause', 'ic-lg')}
              <span class="timer-display">${fmtDur((rf.baseSec || 0) * 1000)}</span>
              <span>Paused (${rf.side}) · tap for options</span>
            </button>`
         : `<button class="action-btn running feed-running" id="btn-feed">
-             <span class="emoji">🍼</span>
+             ${Icon('bottle', 'ic-lg')}
              <span class="timer-display" data-since="${rf.startedAt}" data-base="${rf.baseSec || 0}">…</span>
              <span>${rf.side === 'left' ? 'Left' : 'Right'} · tap for options</span>
            </button>`)
-      : `<button class="action-btn feed" id="btn-feed"><span class="emoji">🍼</span>Feed</button>`;
+      : `<button class="action-btn feed" id="btn-feed">${Icon('bottle', 'ic-lg')}Feed</button>`;
 
     view.innerHTML = `
       <h1>Baby Tracker</h1>
@@ -172,7 +172,7 @@
       <div class="actions">
         ${sleepBtn}
         ${feedBtn}
-        ${diapersVisible() ? `<button class="action-btn diaper" id="btn-diaper"><span class="emoji">💩</span>Diaper</button>` : ''}
+        ${diapersVisible() ? `<button class="action-btn diaper" id="btn-diaper">${Icon('diaper', 'ic-lg')}Diaper</button>` : ''}
       </div>
       ${lastWake ? `<h2>Last events</h2>` : ''}
       ${events.slice(0, 3).map(eventRowHtml).join('')}
@@ -229,10 +229,10 @@
       openSheet(`
         <h3>Feed</h3>
         <div class="choice-row">
-          <button class="choice" id="feed-left">🤱 Left<span class="sub">start timer</span></button>
-          <button class="choice" id="feed-right">🤱 Right<span class="sub">start timer</span></button>
+          <button class="choice" id="feed-left">${Icon('drop', 'ic-choice')}Left<span class="sub">start timer</span></button>
+          <button class="choice" id="feed-right">${Icon('drop', 'ic-choice')}Right<span class="sub">start timer</span></button>
         </div>
-        <div class="choice-row"><button class="choice" id="feed-bottle">🍼 Bottle</button></div>
+        <div class="choice-row"><button class="choice" id="feed-bottle">${Icon('bottle', 'ic-choice')}Bottle</button></div>
         <div id="bottle-area" class="hidden">
           <div class="stepper">
             <button id="oz-minus">−</button>
@@ -275,8 +275,8 @@
         <h3>Feeding — ${f.side} side${f.paused ? ' (paused)' : ''}</h3>
         <div class="subtitle">This side: ${fmtDur(thisSideTotal * 1000)}
           ${f[otherSide + 'Sec'] ? ` · ${otherSide}: ${fmtDur(f[otherSide + 'Sec'] * 1000)}` : ''}</div>
-        <button class="btn secondary" id="pause-feed">${f.paused ? '▶️ Resume feed' : '⏸️ Pause (burp / clean-up)'}</button>
-        <button class="btn secondary" id="switch-side">Switch to ${otherSide}</button>
+        <button class="btn secondary" id="pause-feed">${f.paused ? Icon('play', 'ic-inline') + ' Resume feed' : Icon('pause', 'ic-inline') + ' Pause (burp / clean-up)'}</button>
+        <button class="btn secondary" id="switch-side">${Icon('swap', 'ic-inline')} Switch to ${otherSide}</button>
         <button class="btn" id="end-feed">End feed</button>
         <button class="btn danger" id="cancel-feed">Discard</button>
       `);
@@ -327,9 +327,9 @@
     openSheet(`
       <h3>Diaper</h3>
       <div class="choice-row">
-        <button class="choice" data-diaper="wet">💧 Wet</button>
-        <button class="choice" data-diaper="dirty">💩 Dirty</button>
-        <button class="choice" data-diaper="both">💧💩 Both</button>
+        <button class="choice" data-diaper="wet">${Icon('drop', 'ic-choice')}Wet</button>
+        <button class="choice" data-diaper="dirty">${Icon('swirl', 'ic-choice')}Dirty</button>
+        <button class="choice" data-diaper="both">${Icon('both', 'ic-choice')}Both</button>
       </div>
     `);
     sheet.querySelectorAll('[data-diaper]').forEach(b => b.addEventListener('click', async () => {
@@ -341,29 +341,31 @@
 
   // ---------- history ----------
   function eventRowHtml(e) {
-    let icon = '😴', title = '', meta = fmtTime(e.startedAt);
+    let icon = 'moon', iconCls = 'ic-sleep', title = '', meta = fmtTime(e.startedAt);
     if (e.type === 'sleep') {
-      icon = e.details.kind === 'night' ? '🌙' : '😴';
+      icon = e.details.kind === 'night' ? 'nightMoon' : 'moon';
       const dur = e.endedAt ? fmtDurShort((new Date(e.endedAt) - new Date(e.startedAt)) / 60000) : 'ongoing';
       title = `${e.details.kind === 'night' ? 'Night sleep' : 'Nap'} · ${dur}`;
       meta = `${fmtTime(e.startedAt)} – ${e.endedAt ? fmtTime(e.endedAt) : '…'}`;
     } else if (e.type === 'feed') {
-      icon = '🍼';
+      icon = 'bottle'; iconCls = 'ic-feed';
       if (e.details.method === 'bottle') {
         title = `Bottle · ${e.details.oz} oz`;
       } else {
+        icon = 'drop';
         const parts = [];
         if (e.details.leftSec) parts.push(`L ${Math.round(e.details.leftSec / 60)}m`);
         if (e.details.rightSec) parts.push(`R ${Math.round(e.details.rightSec / 60)}m`);
         title = `Nursed · ${parts.join(' + ') || '<1m'}`;
       }
     } else if (e.type === 'diaper') {
-      icon = e.details.kind === 'wet' ? '💧' : e.details.kind === 'both' ? '💧💩' : '💩';
+      icon = e.details.kind === 'wet' ? 'drop' : e.details.kind === 'both' ? 'both' : 'swirl';
+      iconCls = 'ic-diaper';
       title = `Diaper · ${e.details.kind}`;
     }
     return `
       <div class="event-row" data-id="${e.id}">
-        <span class="icon">${icon}</span>
+        <span class="icon ${iconCls}">${Icon(icon)}</span>
         <div class="info"><div class="title">${title}</div><div class="meta">${meta}</div></div>
         <button class="del" data-del="${e.id}">✕</button>
       </div>`;
@@ -435,10 +437,10 @@
         js/config.js and run sql/setup.sql in Supabase (see README).
       </div>`;
     }
-    const label = s.state === 'ok' ? '✅ Synced'
-      : s.state === 'syncing' ? '🔄 Syncing…'
-      : s.state === 'nokey' ? '🔑 Enter the family passphrase above to sync'
-      : `⚠️ Sync error${s.pending ? ` — ${s.pending} change(s) queued` : ''}`;
+    const label = s.state === 'ok' ? `${Icon('check', 'ic-inline')} Synced`
+      : s.state === 'syncing' ? `${Icon('sync', 'ic-inline')} Syncing…`
+      : s.state === 'nokey' ? `${Icon('key', 'ic-inline')} Enter the family passphrase above to sync`
+      : `${Icon('warn', 'ic-inline')} Sync error${s.pending ? ` — ${s.pending} change(s) queued` : ''}`;
     return `<div class="subtitle" style="margin-top:16px">
       Shared sync: ${label}${s.error ? `<br>${esc(s.error)}` : ''}
     </div>`;
@@ -520,7 +522,7 @@
     document.querySelectorAll('.countdown[data-until]').forEach(el => {
       const diff = new Date(el.dataset.until).getTime() - Date.now();
       if (diff <= 0) {
-        el.textContent = 'time now ✨';
+        el.innerHTML = `time now ${Icon('sparkle', 'ic-inline')}`;
         el.classList.add('now');
       } else {
         const m = Math.ceil(diff / 60000);
@@ -537,6 +539,9 @@
     clearInterval(tickInterval);
     tickInterval = setInterval(tick, 1000);
   }
+
+  // Inject custom SVG icons into the static tab bar
+  document.querySelectorAll('[data-icon]').forEach(el => { el.innerHTML = Icon(el.dataset.icon); });
 
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
     currentTab = t.dataset.tab;
