@@ -99,22 +99,44 @@
         lastNapDurationMin: lastNapDur, recentWakeWindows, now,
       });
       const timeStr = sug.suggestedTime ? fmtTime(sug.suggestedTime) : '—';
-      const label = sug.isBedtime ? 'Suggested bedtime' : `Suggested nap ${napsToday + 1}`;
+      const label = sug.isBedtime ? 'Bedtime' : `Nap ${napsToday + 1}`;
+      const C = (2 * Math.PI * 84).toFixed(1);
+      const ringData = (sug.suggestedTime && lastWake)
+        ? `data-start="${lastWake.toISOString()}" data-target="${sug.suggestedTime.toISOString()}"` : '';
       suggestionHtml = `
         <div class="card suggestion">
           <div class="engine-toggle">
             ${Schedules.engineList().map(e =>
               `<button data-engine="${e.id}" class="${settings.engine === e.id ? 'selected' : ''}">${esc(e.name)}</button>`).join('')}
           </div>
-          <div>${label}</div>
-          <div class="big-time">${timeStr}</div>
+          <div class="hero-body">
+            <div class="ring-wrap">
+              <svg viewBox="0 0 200 200">
+                <defs>
+                  <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#c4b5fd"/>
+                    <stop offset="55%" stop-color="#8b5cf6"/>
+                    <stop offset="100%" stop-color="#5eead4"/>
+                  </linearGradient>
+                </defs>
+                <circle class="ring-track" cx="100" cy="100" r="84"/>
+                <circle class="ring-fill" cx="100" cy="100" r="84"
+                  stroke-dasharray="${C}" stroke-dashoffset="${C}" ${ringData}/>
+              </svg>
+              <div class="ring-center">
+                <div class="ring-label">${label}</div>
+                <div class="big-time">${timeStr}</div>
+                <div class="countdown" ${sug.suggestedTime ? `data-until="${sug.suggestedTime.toISOString()}"` : ''}></div>
+              </div>
+            </div>
+          </div>
           <div class="engine-note">
             Wake window ${fmtDurShort(sug.windowMin)}–${fmtDurShort(sug.windowMax)} ·
             ${sug.napsExpected} naps/day · bedtime ${fmtTime(sug.bedtimeRange[0])}–${fmtTime(sug.bedtimeRange[1])}
           </div>
-          ${sug.note ? `<div class="engine-note" style="margin-top:4px">${esc(sug.note)}</div>` : ''}
-          ${sug.personalized ? `<div class="engine-note" style="margin-top:4px">✨ Personalized from your baby's logged wake windows</div>` : ''}
-          ${!lastWake ? `<div class="engine-note" style="margin-top:4px">Log a sleep so I know the last wake-up.</div>` : ''}
+          ${sug.note ? `<div class="engine-note">${esc(sug.note)}</div>` : ''}
+          ${sug.personalized ? `<div class="engine-note">✨ Personalized from your baby's logged wake windows</div>` : ''}
+          ${!lastWake ? `<div class="engine-note">Log a sleep so I know the last wake-up.</div>` : ''}
         </div>`;
     } else if (w === null) {
       suggestionHtml = `<div class="card suggestion"><div>Set your baby's birthdate in Settings to get nap suggestions.</div></div>`;
@@ -471,15 +493,49 @@
   // ---------- render loop ----------
   const renderers = { home: renderHome, history: renderHistory, stats: renderStats, settings: renderSettings };
 
+  // Scene director: sky palette follows the clock; moon rises during sleep
+  function applyScene() {
+    const h = new Date().getHours();
+    const cls = h >= 5 && h < 8 ? 'dawn' : h >= 8 && h < 17 ? 'day' : h >= 17 && h < 20 ? 'dusk' : 'night';
+    document.body.classList.remove('dawn', 'day', 'dusk', 'night');
+    document.body.classList.add(cls);
+    document.body.classList.toggle('sleeping', !!Store.getRunning().sleep);
+  }
+
+  function tick() {
+    document.querySelectorAll('.timer-display[data-since]').forEach(el => {
+      const base = (parseInt(el.dataset.base, 10) || 0) * 1000;
+      el.textContent = fmtDur(Date.now() - new Date(el.dataset.since).getTime() + base);
+    });
+    // Hero ring: fill = progress through the current wake window
+    document.querySelectorAll('.ring-fill[data-target]').forEach(el => {
+      const start = new Date(el.dataset.start).getTime();
+      const end = new Date(el.dataset.target).getTime();
+      const C = 2 * Math.PI * 84;
+      // Target already passed (e.g. past bedtime) → window complete, ring full
+      const pct = end <= start ? 1
+        : Math.min(1, Math.max(0, (Date.now() - start) / (end - start)));
+      el.style.strokeDashoffset = (C * (1 - pct)).toFixed(1);
+    });
+    document.querySelectorAll('.countdown[data-until]').forEach(el => {
+      const diff = new Date(el.dataset.until).getTime() - Date.now();
+      if (diff <= 0) {
+        el.textContent = 'time now ✨';
+        el.classList.add('now');
+      } else {
+        const m = Math.ceil(diff / 60000);
+        el.textContent = m >= 60 ? `in ${Math.floor(m / 60)}h ${m % 60}m` : `in ${m}m`;
+        el.classList.remove('now');
+      }
+    });
+  }
+
   async function render() {
+    applyScene();
     await renderers[currentTab]();
+    tick();
     clearInterval(tickInterval);
-    tickInterval = setInterval(() => {
-      document.querySelectorAll('.timer-display[data-since]').forEach(el => {
-        const base = (parseInt(el.dataset.base, 10) || 0) * 1000;
-        el.textContent = fmtDur(Date.now() - new Date(el.dataset.since).getTime() + base);
-      });
-    }, 1000);
+    tickInterval = setInterval(tick, 1000);
   }
 
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
