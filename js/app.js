@@ -399,33 +399,10 @@
     bindRowDeletes();
   }
 
-  // ---------- stats ----------
+  // ---------- trends ----------
   async function renderStats() {
     const events = await Store.getEvents();
-    const now = new Date();
-    const today = events.filter(e => sameDay(e.startedAt, now));
-    const sleeps = today.filter(e => e.type === 'sleep' && e.endedAt);
-    const sleepMin = sleeps.reduce((t, e) => t + (new Date(e.endedAt) - new Date(e.startedAt)) / 60000, 0);
-    const naps = sleeps.filter(e => e.details.kind === 'nap').length;
-    const feeds = today.filter(e => e.type === 'feed');
-    const oz = feeds.reduce((t, e) => t + (e.details.oz || 0), 0);
-    const nursedMin = feeds.reduce((t, e) => t + ((e.details.leftSec || 0) + (e.details.rightSec || 0)) / 60, 0);
-    const diapers = today.filter(e => e.type === 'diaper');
-    const wet = diapers.filter(e => e.details.kind !== 'dirty').length;
-    const dirty = diapers.filter(e => e.details.kind !== 'wet').length;
-
-    view.innerHTML = `
-      <h1>Today</h1>
-      <div class="subtitle">${ageLabel()}</div>
-      <div class="stat-grid">
-        <div class="stat"><div class="num">${fmtDurShort(sleepMin)}</div><div class="lbl">Total sleep</div></div>
-        <div class="stat"><div class="num">${naps}</div><div class="lbl">Naps</div></div>
-        <div class="stat"><div class="num">${feeds.length}</div><div class="lbl">Feeds</div></div>
-        <div class="stat"><div class="num">${oz ? oz + ' oz' : fmtDurShort(nursedMin) || '0'}</div><div class="lbl">${oz ? 'Bottle total' : 'Nursing time'}</div></div>
-        ${diapersVisible() ? `
-          <div class="stat"><div class="num">${wet}</div><div class="lbl">Wet diapers</div></div>
-          <div class="stat"><div class="num">${dirty}</div><div class="lbl">Dirty diapers</div></div>` : ''}
-      </div>`;
+    Trends.render(view, events);
   }
 
   // ---------- settings ----------
