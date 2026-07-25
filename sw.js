@@ -1,15 +1,15 @@
-const CACHE = 'baby-tracker-v9';
+const CACHE = 'baby-tracker-v10';
 // Keep ?v= in step with index.html so precached URLs match page requests
 const ASSETS = [
   '.',
   'index.html',
-  'css/styles.css?v=9',
-  'js/app.js?v=9',
-  'js/config.js?v=9',
-  'js/icons.js?v=9',
-  'js/store.js?v=9',
-  'js/schedules.js?v=9',
-  'js/trends.js?v=9',
+  'css/styles.css?v=10',
+  'js/app.js?v=10',
+  'js/config.js?v=10',
+  'js/icons.js?v=10',
+  'js/store.js?v=10',
+  'js/schedules.js?v=10',
+  'js/trends.js?v=10',
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',

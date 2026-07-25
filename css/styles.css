@@ -113,7 +113,7 @@ body {
 }
 
 .moon {
-  position: absolute; top: calc(var(--safe-top) + 16px); right: 20px;
+  position: absolute; top: calc(var(--safe-top) + 16px); right: 80px;
   width: 54px; height: 54px; border-radius: 50%;
   background: radial-gradient(circle at 38% 34%, #fdfbff 0%, #cfc6f5 55%, #9a8bd8 100%);
   box-shadow: 0 0 40px 8px rgba(200, 185, 255, 0.35), 0 0 140px 40px rgba(150, 130, 255, 0.18);
