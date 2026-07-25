@@ -13,21 +13,25 @@ python3 -m http.server 8642
 
 Then open http://localhost:8642.
 
-## Turn on shared sync (both phones see the same data)
+## Turn on shared sync (multi-tenant: any number of families)
+
+One deployment + one Supabase project serves many families; each family's
+passphrase scopes it to its own data via row-level security.
 
 1. Create a free project at https://supabase.com.
-2. In the Supabase dashboard, open **SQL Editor**, paste [sql/setup.sql](sql/setup.sql),
-   replace `CHANGE_ME_FAMILY_PASSPHRASE` with your own long passphrase, and Run.
+2. In the Supabase dashboard, open **SQL Editor**, paste [sql/setup.sql](sql/setup.sql), Run.
 3. In **Project Settings → Data API**, copy the **Project URL** and the
    **anon / publishable key** (never the `service_role` key) into
-   [js/config.js](js/config.js). These two values are safe to publish; the
-   passphrase is not — it is never committed to the repo.
-4. In the app, open **Settings → Family passphrase** on each phone and enter
-   the passphrase from step 2. Settings shows "Shared sync: ✅ Synced".
+   [js/config.js](js/config.js). These two values are safe to publish;
+   passphrases are not — they're never in the repo (only sha256 hashes are
+   stored server-side).
+4. In the app, open **Settings** → tap **Create a new family**. The app
+   generates a passphrase — share it privately with your partner, who enters
+   it once in Settings on their phone. Both phones show "Synced".
 
-To revoke access (e.g. leaked passphrase): re-run the
-`create or replace function public.family_key_ok()` block in setup.sql with a
-new passphrase, then enter the new passphrase in Settings on both phones.
+Joining an existing family = entering its passphrase in Settings. A lost
+passphrase can't be recovered (only hashes are stored) — but data isn't lost:
+insert a new hash for your family row in SQL to rotate the key.
 
 ## Deploy free
 

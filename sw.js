@@ -1,14 +1,15 @@
-const CACHE = 'baby-tracker-v5';
+const CACHE = 'baby-tracker-v6';
+// Keep ?v= in step with index.html so precached URLs match page requests
 const ASSETS = [
   '.',
   'index.html',
-  'css/styles.css',
-  'js/app.js',
-  'js/config.js',
-  'js/icons.js',
-  'js/store.js',
-  'js/schedules.js',
-  'js/trends.js',
+  'css/styles.css?v=6',
+  'js/app.js?v=6',
+  'js/config.js?v=6',
+  'js/icons.js?v=6',
+  'js/store.js?v=6',
+  'js/schedules.js?v=6',
+  'js/trends.js?v=6',
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',
@@ -27,11 +28,11 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Network-first, cache fallback — so updates land but the app works offline.
+// Network-first (revalidating, so new deploys land immediately), cache fallback.
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then(res => {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));

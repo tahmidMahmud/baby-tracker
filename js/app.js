@@ -414,13 +414,37 @@
         js/config.js and run sql/setup.sql in Supabase (see README).
       </div>`;
     }
-    const label = s.state === 'ok' ? `${Icon('check', 'ic-inline')} Synced`
+    const label = s.state === 'ok' ? `${Icon('check', 'ic-inline')} Synced${s.familyName ? ` — family “${esc(s.familyName)}”` : ''}`
       : s.state === 'syncing' ? `${Icon('sync', 'ic-inline')} Syncing…`
-      : s.state === 'nokey' ? `${Icon('key', 'ic-inline')} Enter the family passphrase above to sync`
+      : s.state === 'nokey' ? `${Icon('key', 'ic-inline')} Enter your family passphrase above, or create a new family`
+      : s.state === 'badkey' ? `${Icon('warn', 'ic-inline')} That passphrase doesn't match any family — check for typos, or create a new family`
       : `${Icon('warn', 'ic-inline')} Sync error${s.pending ? ` — ${s.pending} change(s) queued` : ''}`;
+    const showCreate = s.enabled && (s.state === 'nokey' || s.state === 'badkey');
     return `<div class="subtitle" style="margin-top:16px">
       Shared sync: ${label}${s.error ? `<br>${esc(s.error)}` : ''}
-    </div>`;
+    </div>
+    ${showCreate ? `<button class="btn secondary" id="create-family-btn">Create a new family</button>` : ''}`;
+  }
+
+  function openNewFamilySheet(key) {
+    openSheet(`
+      <h3>Your family is ready</h3>
+      <div class="subtitle">This passphrase is the key to your family's data.
+        Send it to your partner (privately) and enter it once on their phone
+        in Settings. Save it somewhere safe — it can't be recovered.</div>
+      <div class="card" style="text-align:center">
+        <div style="font-size:1.15rem;font-weight:800;letter-spacing:0.02em;user-select:all" id="new-family-key">${esc(key)}</div>
+      </div>
+      <button class="btn" id="copy-family-key">Copy passphrase</button>
+      <button class="btn secondary" id="close-family-sheet">Done</button>
+    `);
+    document.getElementById('copy-family-key').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(key);
+        document.getElementById('copy-family-key').textContent = 'Copied ✓';
+      } catch { /* clipboard may be blocked; text is selectable above */ }
+    });
+    document.getElementById('close-family-sheet').addEventListener('click', closeSheet);
   }
 
   function renderSettings() {
@@ -460,6 +484,20 @@
       Store.syncNow();
     });
     document.getElementById('set-diapers').addEventListener('change', e => Store.setSettings({ showDiapers: e.target.value }));
+    document.getElementById('create-family-btn')?.addEventListener('click', async e => {
+      const btn = e.target;
+      btn.disabled = true;
+      btn.textContent = 'Creating…';
+      try {
+        const name = document.getElementById('set-name').value.trim();
+        const key = await Store.createFamily(name ? `${name}'s family` : '');
+        openNewFamilySheet(key);
+      } catch (err) {
+        alert('Could not create family: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = 'Create a new family';
+      }
+    });
     document.getElementById('export-btn').addEventListener('click', async () => {
       const blob = new Blob([await Store.exportJson()], { type: 'application/json' });
       const a = document.createElement('a');

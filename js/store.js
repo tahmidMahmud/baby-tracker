@@ -20,8 +20,9 @@ const Store = (() => {
   const PENDING_KEY = 'baby.pending.v1';
 
   const listeners = [];
-  let syncState = 'off'; // 'off' | 'ok' | 'syncing' | 'error'
+  let syncState = 'off'; // 'off' | 'ok' | 'syncing' | 'error' | 'nokey' | 'badkey'
   let lastSyncError = null;
+  let familyName = null;
 
   const cfg = (typeof SUPABASE_CONFIG !== 'undefined') ? SUPABASE_CONFIG : {};
   const sbEnabled = !!(cfg.url && cfg.anonKey);
@@ -121,6 +122,17 @@ const Store = (() => {
     }
     syncState = 'syncing';
     try {
+      // Resolve the passphrase to a family first: a wrong key would
+      // otherwise read as an empty event list and blank the local cache.
+      const famRes = await sbFetch('families?select=id,name');
+      const fams = await famRes.json();
+      if (!fams.length) {
+        syncState = 'badkey';
+        familyName = null;
+        listeners.forEach(fn => fn());
+        return;
+      }
+      familyName = fams[0].name || '';
       await flush(); // push our pending writes first
       const res = await sbFetch('events?select=*&order=started_at.desc&limit=5000');
       const rows = await res.json();
@@ -216,7 +228,38 @@ const Store = (() => {
       state: syncState,
       pending: load(PENDING_KEY, []).length,
       error: lastSyncError,
+      familyName,
     };
+  }
+
+  // ---- Family creation (multi-tenant) ----
+  async function sha256hex(s) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  function generatePassphrase() {
+    const words = ['maple', 'otter', 'sunrise', 'bassinet', 'lavender', 'walrus',
+      'midnight', 'clover', 'pebble', 'willow', 'acorn', 'meadow', 'ember',
+      'tulip', 'harbor', 'sparrow', 'cocoa', 'drizzle', 'fern', 'lantern',
+      'mellow', 'nimbus', 'poppy', 'quilt', 'ripple', 'saffron', 'thistle',
+      'velvet', 'wander', 'zephyr', 'bramble', 'cricket', 'dewdrop', 'fable'];
+    const rnd = new Uint32Array(5);
+    crypto.getRandomValues(rnd);
+    const picks = [...rnd].slice(0, 4).map(n => words[n % words.length]);
+    return `${picks.join('-')}-${1000 + (rnd[4] % 9000)}`;
+  }
+
+  async function createFamily(name) {
+    const key = generatePassphrase();
+    const keyHash = await sha256hex(key);
+    await sbFetch('families', {
+      method: 'POST',
+      body: JSON.stringify([{ name: name || '', key_hash: keyHash }]),
+    });
+    setSettings({ familyKey: key });
+    pull();
+    return key;
   }
 
   function onChange(fn) { listeners.push(fn); }
@@ -231,5 +274,5 @@ const Store = (() => {
 
   return { getEvents, addEvent, updateEvent, deleteEvent,
            getRunning, setRunning, getSettings, setSettings,
-           getSyncInfo, onChange, exportJson, syncNow: pull };
+           getSyncInfo, createFamily, onChange, exportJson, syncNow: pull };
 })();
