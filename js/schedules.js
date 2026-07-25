@@ -86,9 +86,60 @@ const Schedules = (() => {
 
   const ENGINES = { tcb: TCB, huckleberry: HB };
 
+  // Typical nap length (minutes) by bracket index — used only for forecasting.
+  // Derived from each brand's day-sleep goals (e.g. TCB 5-7mo: 3-4h over 3
+  // naps ≈ 70m/nap); newborn naps assumed shorter.
+  TCB.napLens = [45, 50, 60, 60, 70, 75, 75, 80];
+  HB.napLens = [45, 50, 60, 65, 70, 75, 80];
+
   function bracketFor(engine, ageWeeks) {
     const b = engine.brackets.find(b => ageWeeks < b.maxWeeks);
     return b || engine.brackets[engine.brackets.length - 1];
+  }
+
+  function napLenFor(engine, ageWeeks) {
+    const i = engine.brackets.findIndex(b => ageWeeks < b.maxWeeks);
+    const lens = engine.napLens || [];
+    return lens[i >= 0 ? i : lens.length - 1] || 60;
+  }
+
+  /**
+   * Simulate the rest of today: remaining naps (with assumed lengths) until
+   * bedtime. Returns [{type:'nap', start, end, n} ..., {type:'bed', start}].
+   */
+  function forecast(engineId, opts) {
+    const engine = ENGINES[engineId] || TCB;
+    const { ageWeeks, now } = opts;
+    const napLen = napLenFor(engine, ageWeeks);
+    const out = [];
+    let wake = opts.lastWakeTime || now;
+    let naps = opts.napsToday;
+    for (let i = 0; i < 7; i++) {
+      const sug = suggest(engineId, {
+        ageWeeks, lastWakeTime: wake, napsToday: naps,
+        lastNapDurationMin: null,
+        recentWakeWindows: opts.recentWakeWindows || [],
+        now,
+      });
+      if (!sug.suggestedTime) break;
+      let start = sug.suggestedTime;
+      if (+start < +now) start = new Date(now); // no naps in the past
+      if (sug.isBedtime) { out.push({ type: 'bed', start }); break; }
+      // A nap that would start within ~75min of the bedtime anchor becomes
+      // bedtime instead (both methods pull bedtime earlier over a late nap)
+      const btStart = sug.bedtimeRange[0];
+      if (+start >= +btStart - 75 * 60000) {
+        // flex bedtime earlier, but never more than 1h before the anchor
+        const bed = Math.min(+btStart, Math.max(+start, +btStart - 60 * 60000));
+        out.push({ type: 'bed', start: new Date(bed) });
+        break;
+      }
+      const end = new Date(+start + napLen * 60000);
+      out.push({ type: 'nap', start, end, n: naps + 1 });
+      wake = end;
+      naps += 1;
+    }
+    return out;
   }
 
   function median(arr) {
@@ -169,5 +220,5 @@ const Schedules = (() => {
     return Object.values(ENGINES).map(e => ({ id: e.id, name: e.name }));
   }
 
-  return { suggest, engineList, bracketFor, ENGINES };
+  return { suggest, forecast, napLenFor, engineList, bracketFor, ENGINES };
 })();

@@ -174,6 +174,7 @@
         ${feedBtn}
         ${diapersVisible() ? `<button class="action-btn diaper" id="btn-diaper">${Icon('diaper', 'ic-lg')}Diaper</button>` : ''}
       </div>
+      ${w !== null ? forecastCardHtml({ w, events, running, lastWake, napsToday, recentWakeWindows, now, selectedEngine: settings.engine }) : ''}
       ${lastWake ? `<h2>Last events</h2>` : ''}
       ${events.slice(0, 3).map(eventRowHtml).join('')}
     `;
@@ -184,6 +185,108 @@
     document.getElementById('btn-feed')?.addEventListener('click', onFeedTap);
     document.getElementById('btn-diaper')?.addEventListener('click', openDiaperSheet);
     bindRowDeletes();
+  }
+
+  // ---------- forecast (rest of today, both engines) ----------
+  function forecastCardHtml({ w, events, running, lastWake, napsToday, recentWakeWindows, now, selectedEngine }) {
+    // today's actual naps (and the in-progress one, if any)
+    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+    const actual = events
+      .filter(e => e.type === 'sleep' && e.endedAt && e.details.kind === 'nap' && new Date(e.startedAt) >= todayStart)
+      .map(e => ({ start: new Date(e.startedAt), end: new Date(e.endedAt) }));
+    const engines = Schedules.engineList();
+
+    // per-engine simulation start: if a nap is running, forecast from its
+    // assumed end; otherwise from the last wake-up
+    const w2 = Schedules; // alias
+    const forecasts = engines.map(en => {
+      let fLastWake = lastWake, fNaps = napsToday, runningNap = null;
+      if (running.sleep && running.sleep.kind === 'nap') {
+        const st = new Date(running.sleep.startedAt);
+        const predEnd = new Date(Math.max(+now, +st + w2.napLenFor(w2.ENGINES[en.id], w) * 60000));
+        runningNap = { start: st, end: predEnd };
+        fLastWake = predEnd;
+        fNaps = napsToday + 1;
+      }
+      return {
+        ...en,
+        runningNap,
+        items: w2.forecast(en.id, { ageWeeks: w, lastWakeTime: fLastWake, napsToday: fNaps, recentWakeWindows, now }),
+      };
+    });
+
+    // time domain for the strip
+    const starts = [+now, ...actual.map(a => +a.start)];
+    const ends = [+now + 2 * 36e5];
+    forecasts.forEach(f => f.items.forEach(it => {
+      ends.push(it.type === 'bed' ? +it.start + 45 * 60000 : +it.end);
+      if (f.runningNap) ends.push(+f.runningNap.end);
+    }));
+    const t0 = Math.min(...starts) - 40 * 60000;
+    const dayCap = +todayStart + 23.75 * 36e5;
+    const t1 = Math.min(dayCap, Math.max(...ends) + 30 * 60000);
+    if (t1 <= t0) return '';
+
+    const W = 340, PT = 14, laneH = 30, laneGap = 16, PB = 4;
+    const H = PT + engines.length * (laneH + laneGap) + PB;
+    const x = t => 8 + ((t - t0) / (t1 - t0)) * (W - 16);
+    const short = t => {
+      const d = new Date(t);
+      let h = d.getHours() % 12 || 12;
+      const m = d.getMinutes();
+      return m ? `${h}:${String(m).padStart(2, '0')}` : `${h}${d.getHours() >= 12 ? 'p' : 'a'}`;
+    };
+
+    let s = '';
+    // hour ticks every 2h on round hours
+    const firstTick = new Date(t0); firstTick.setMinutes(0, 0, 0);
+    for (let t = +firstTick; t <= t1; t += 2 * 36e5) {
+      if (t < t0) continue;
+      s += `<line x1="${x(t).toFixed(1)}" y1="${PT}" x2="${x(t).toFixed(1)}" y2="${H - PB}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>`;
+      s += `<text x="${x(t).toFixed(1)}" y="${PT - 4}" fill="rgba(214,218,255,0.4)" font-size="8.5" text-anchor="middle">${short(t)}</text>`;
+    }
+
+    forecasts.forEach((f, i) => {
+      const y = PT + i * (laneH + laneGap) + 4;
+      const sel = f.id === selectedEngine;
+      s += `<g opacity="${sel ? 1 : 0.5}">`;
+      s += `<text x="8" y="${y + laneH + 10}" fill="rgba(214,218,255,${sel ? 0.75 : 0.5})" font-size="8.5" font-weight="700" letter-spacing="1">${f.name.toUpperCase()}</text>`;
+      // actual naps: solid
+      for (const a of actual) {
+        s += `<rect x="${x(+a.start).toFixed(1)}" y="${y}" width="${Math.max(3, x(+a.end) - x(+a.start)).toFixed(1)}" height="${laneH - 8}" rx="3" fill="#8b5cf6" opacity="0.9"/>`;
+      }
+      // in-progress nap: solid to now, ghost to predicted end
+      if (f.runningNap) {
+        const rn = f.runningNap;
+        s += `<rect x="${x(+rn.start).toFixed(1)}" y="${y}" width="${Math.max(3, x(Math.min(+now, +rn.end)) - x(+rn.start)).toFixed(1)}" height="${laneH - 8}" rx="3" fill="#8b5cf6" opacity="0.9"/>`;
+        if (+rn.end > +now) s += `<rect x="${x(+now).toFixed(1)}" y="${y}" width="${Math.max(2, x(+rn.end) - x(+now)).toFixed(1)}" height="${laneH - 8}" rx="3" fill="#8b5cf6" opacity="0.25" stroke="#8b5cf6" stroke-width="1" stroke-dasharray="3 3"/>`;
+      }
+      // forecast naps: ghost blocks with start-time labels
+      for (const it of f.items) {
+        if (it.type === 'nap') {
+          s += `<rect x="${x(+it.start).toFixed(1)}" y="${y}" width="${Math.max(3, x(+it.end) - x(+it.start)).toFixed(1)}" height="${laneH - 8}" rx="3" fill="#8b5cf6" opacity="0.22" stroke="#8b5cf6" stroke-width="1.2" stroke-dasharray="3 3"/>`;
+          s += `<text x="${x(+it.start).toFixed(1)}" y="${y + laneH + 1}" fill="rgba(214,218,255,0.6)" font-size="8.5" text-anchor="middle">${short(+it.start)}</text>`;
+        } else {
+          s += `<line x1="${x(+it.start).toFixed(1)}" y1="${y - 2}" x2="${x(+it.start).toFixed(1)}" y2="${y + laneH - 6}" stroke="#c4b5fd" stroke-width="2"/>`;
+          s += `<text x="${x(+it.start).toFixed(1)}" y="${y + laneH + 1}" fill="#c4b5fd" font-size="8.5" font-weight="700" text-anchor="middle">bed ${short(+it.start)}</text>`;
+        }
+      }
+      s += `</g>`;
+    });
+
+    // now marker on top
+    s += `<line x1="${x(+now).toFixed(1)}" y1="${PT - 2}" x2="${x(+now).toFixed(1)}" y2="${H - PB}" stroke="#5eead4" stroke-width="1.5"/>`;
+    s += `<circle cx="${x(+now).toFixed(1)}" cy="${PT - 2}" r="2.5" fill="#5eead4"/>`;
+
+    return `
+      <h2>Rest of today — forecast</h2>
+      <div class="chart-card forecast-card">
+        <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;overflow:visible">${s}</svg>
+        <div class="engine-note" style="text-align:left;margin-top:8px">
+          Dashed = projected naps (typical lengths for this age) · solid = logged ·
+          <span style="color:#5eead4">teal line</span> = now. Your selected engine is highlighted.
+        </div>
+      </div>`;
   }
 
   // ---------- sleep ----------
