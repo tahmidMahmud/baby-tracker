@@ -606,6 +606,60 @@ select option { background: #14122b; color: var(--text); }
   color: var(--text-dim); margin-right: 6px;
 }
 
+/* ---------------- Age guide ---------------- */
+.home-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.guide-btn {
+  width: 44px; height: 44px; flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-strong);
+  color: var(--text);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: transform 0.12s, box-shadow 0.2s;
+}
+.guide-btn:active { transform: scale(0.92); }
+.guide-btn .ic { width: 21px; height: 21px; }
+
+.guide-age-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.guide-step {
+  width: 44px; height: 44px; flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-strong);
+  color: var(--text);
+  font-size: 1.4rem; font-family: inherit;
+  cursor: pointer;
+}
+.guide-step:active { transform: scale(0.92); }
+.guide-age { flex: 1; }
+.guide-age-label { text-align: center; font-weight: 800; font-size: 1rem; margin-bottom: 6px; }
+input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 6px; padding: 0; margin: 8px 0;
+  border-radius: 999px; border: none;
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.7), rgba(94, 234, 212, 0.6));
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow: 0 0 14px rgba(167, 139, 250, 0.8), 0 2px 6px rgba(0,0,0,0.4);
+  cursor: pointer;
+}
+.guide-card { padding: 14px 16px; margin-bottom: 10px; }
+.guide-engine { font-weight: 800; font-size: 0.95rem; margin-bottom: 8px; color: #c4b5fd; }
+.guide-row {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 0.85rem; color: var(--text-dim);
+  padding: 3px 0;
+}
+.guide-row b { color: var(--text); font-weight: 700; text-align: right; }
+.guide-note { font-size: 0.78rem; color: var(--text-dim); margin-top: 7px; font-style: italic; }
+
 /* ---------------- Motion preferences ---------------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

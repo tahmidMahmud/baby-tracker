@@ -166,8 +166,13 @@
       : `<button class="action-btn feed" id="btn-feed">${Icon('bottle', 'ic-lg')}Feed</button>`;
 
     view.innerHTML = `
-      <h1>Baby Tracker</h1>
-      <div class="subtitle">${ageLabel()}</div>
+      <div class="home-head">
+        <div>
+          <h1>Baby Tracker</h1>
+          <div class="subtitle" style="margin-bottom:0">${ageLabel()}</div>
+        </div>
+        <button class="guide-btn" id="btn-guide" title="Age guide">${Icon('book')}</button>
+      </div>
       ${suggestionHtml}
       <div class="actions">
         ${sleepBtn}
@@ -181,10 +186,70 @@
 
     view.querySelectorAll('[data-engine]').forEach(b =>
       b.addEventListener('click', () => { Store.setSettings({ engine: b.dataset.engine }); }));
+    document.getElementById('btn-guide')?.addEventListener('click', openGuideSheet);
     document.getElementById('btn-sleep')?.addEventListener('click', onSleepTap);
     document.getElementById('btn-feed')?.addEventListener('click', onFeedTap);
     document.getElementById('btn-diaper')?.addEventListener('click', openDiaperSheet);
     bindRowDeletes();
+  }
+
+  // ---------- age guide ----------
+  function hourStr(h) {
+    const hh = Math.floor(h) % 24, mm = Math.round((h % 1) * 60);
+    const ap = hh >= 12 ? 'PM' : 'AM';
+    return `${hh % 12 || 12}${mm ? ':' + pad(mm) : ''} ${ap}`;
+  }
+
+  function openGuideSheet() {
+    let weeks = ageWeeks() !== null ? Math.round(ageWeeks()) : 15;
+    weeks = Math.min(60, Math.max(0, weeks));
+    openSheet(`
+      <h3>Age guide</h3>
+      <div class="guide-age-row">
+        <button class="guide-step" id="g-minus">−</button>
+        <div class="guide-age">
+          <div class="guide-age-label" id="g-label"></div>
+          <input type="range" id="g-slider" min="0" max="60" step="1" value="${weeks}">
+        </div>
+        <button class="guide-step" id="g-plus">+</button>
+      </div>
+      <div id="guide-content"></div>
+    `);
+    const content = document.getElementById('g-content') || document.getElementById('guide-content');
+    const label = document.getElementById('g-label');
+    const slider = document.getElementById('g-slider');
+
+    const renderGuide = () => {
+      const months = weeks / 4.345;
+      label.textContent = `${weeks} weeks (~${months < 1 ? 'newborn' : months.toFixed(1) + ' months'})`;
+      slider.value = weeks;
+      content.innerHTML = Schedules.engineList().map(en => {
+        const engine = Schedules.ENGINES[en.id];
+        const br = Schedules.bracketFor(engine, weeks);
+        const napLen = Schedules.napLenFor(engine, weeks);
+        const perNap = br.perNap
+          ? `<div class="guide-row"><span>Windows through the day</span><b>${br.perNap.map(m => fmtDurShort(m)).join(' → ')}</b></div>`
+          : '';
+        return `
+          <div class="card guide-card">
+            <div class="guide-engine">${esc(en.name)}</div>
+            <div class="guide-row"><span>Wake windows</span><b>${fmtDurShort(br.ww[0])} – ${fmtDurShort(br.ww[1])}</b></div>
+            <div class="guide-row"><span>Naps per day</span><b>${br.naps}</b></div>
+            <div class="guide-row"><span>Typical nap length</span><b>~${fmtDurShort(napLen)}</b></div>
+            <div class="guide-row"><span>Bedtime</span><b>${hourStr(br.bedtime[0])} – ${hourStr(br.bedtime[1])}</b></div>
+            ${perNap}
+            ${br.note ? `<div class="guide-note">${esc(br.note)}</div>` : ''}
+          </div>`;
+      }).join('') + `
+        <div class="engine-note" style="text-align:left;margin-top:4px">
+          From each brand's published guidance (verified 2026-07-24; see
+          docs/research.md in the repo for sources and caveats).
+        </div>`;
+    };
+    renderGuide();
+    slider.addEventListener('input', () => { weeks = parseInt(slider.value, 10); renderGuide(); });
+    document.getElementById('g-minus').addEventListener('click', () => { weeks = Math.max(0, weeks - 1); renderGuide(); });
+    document.getElementById('g-plus').addEventListener('click', () => { weeks = Math.min(60, weeks + 1); renderGuide(); });
   }
 
   // ---------- forecast (rest of today, both engines) ----------
