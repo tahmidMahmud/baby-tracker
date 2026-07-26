@@ -264,6 +264,40 @@ const Store = (() => {
 
   function onChange(fn) { listeners.push(fn); }
 
+  // ---- Validation for user-edited events (pure; also exercised by tests) ----
+  function validateEvent(e, now = new Date()) {
+    if (!e || !['sleep', 'feed', 'diaper'].includes(e.type)) return 'Unknown event type';
+    const st = new Date(e.startedAt);
+    if (isNaN(+st)) return 'Invalid start time';
+    if (+st > +now + 5 * 60000) return 'Start time is in the future';
+    const needsEnd = e.type === 'sleep' ||
+      (e.type === 'feed' && e.details && e.details.method === 'breast');
+    if (needsEnd) {
+      const en = new Date(e.endedAt);
+      if (!e.endedAt || isNaN(+en)) return 'Invalid end time';
+      if (+en <= +st) return 'End must be after start';
+      const hours = (+en - +st) / 36e5;
+      if (e.type === 'sleep' && hours > 24) return 'Sleep longer than 24 hours — check the dates';
+      if (e.type === 'feed' && hours > 4) return 'Feed longer than 4 hours — check the times';
+    }
+    if (e.type === 'sleep' && !['nap', 'night'].includes(e.details && e.details.kind)) {
+      return 'Sleep must be a nap or night sleep';
+    }
+    if (e.type === 'diaper' && !['wet', 'dirty', 'both'].includes(e.details && e.details.kind)) {
+      return 'Choose wet, dirty, or both';
+    }
+    if (e.type === 'feed') {
+      const d = e.details || {};
+      if (d.method === 'bottle') {
+        if (!(d.oz > 0 && d.oz <= 16)) return 'Bottle must be between 0 and 16 oz';
+      } else if (d.method === 'breast') {
+        if (d.leftSec < 0 || d.rightSec < 0) return 'Nursing time cannot be negative';
+        if ((d.leftSec || 0) + (d.rightSec || 0) <= 0) return 'Log time on at least one side';
+      } else return 'Unknown feed method';
+    }
+    return null;
+  }
+
   async function exportJson() {
     return JSON.stringify({
       settings: getSettings(),
@@ -274,5 +308,6 @@ const Store = (() => {
 
   return { getEvents, addEvent, updateEvent, deleteEvent,
            getRunning, setRunning, getSettings, setSettings,
-           getSyncInfo, createFamily, onChange, exportJson, syncNow: pull };
+           getSyncInfo, createFamily, validateEvent,
+           onChange, exportJson, syncNow: pull };
 })();

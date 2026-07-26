@@ -663,6 +663,18 @@ input[type="range"]::-webkit-slider-thumb {
 .guide-links a { color: #a5b4fc; text-decoration: none; border-bottom: 1px solid rgba(165, 180, 252, 0.4); }
 .guide-links a:active { color: #c4b5fd; }
 
+.edit-err {
+  background: rgba(251, 113, 133, 0.12);
+  border: 1px solid rgba(251, 113, 133, 0.4);
+  color: var(--danger);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 4px;
+}
+.event-row[data-id] { cursor: pointer; }
+
 /* ---------------- Motion preferences ---------------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

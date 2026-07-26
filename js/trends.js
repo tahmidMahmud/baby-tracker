@@ -20,17 +20,33 @@ const Trends = (() => {
   const shortDate = d => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   const h1 = n => (Math.round(n * 10) / 10).toString();
 
-  function rangeDays(events) {
-    const today = sod(new Date());
+  function rangeDays(events, now = new Date()) {
+    const today = sod(now);
     let n = state.range === 'day' ? 1 : state.range === 'week' ? 7 : state.range === 'month' ? 30 : 0;
     if (!n) { // all time
       const first = events.length ? sod(new Date(Math.min(...events.map(e => +new Date(e.startedAt))))) : today;
       n = Math.max(7, Math.round((+today - +first) / DAY) + 1);
     }
+    // Walk calendar days (not fixed 24h steps): a DST transition day is 23 or
+    // 25 hours long, and epoch arithmetic would skip or repeat a date there.
     const days = [];
-    for (let i = n - 1; i >= 0; i--) days.push(new Date(+today - i * DAY));
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      days.push(d);
+    }
     return days;
   }
+
+  // Wall-clock hour-of-day for a timestamp clipped to one calendar day —
+  // correct across DST, where hours-since-midnight ≠ epoch/3.6e6.
+  function wallHours(t, dayStart, dayEnd) {
+    if (+t <= +dayStart) return 0;
+    if (+t >= +dayEnd) return 24;
+    const d = new Date(t);
+    return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+  }
+  const nextDay = d => { const x = new Date(d); x.setDate(x.getDate() + 1); return x; };
 
   // ---------- metric builders ----------
   // A night "belongs to" the evening it started: sleeps starting after noon
@@ -109,16 +125,19 @@ const Trends = (() => {
 
     const dayIdx = Object.fromEntries(days.map((d, i) => [key(d), i]));
 
-    // sleep blocks, clipped per-day (a night spanning midnight paints 2 columns)
+    // sleep blocks, clipped per-day (a night spanning midnight paints 2
+    // columns); positions use wall-clock hours so DST days draw correctly
     if (state.show.sleep) for (const e of events) {
       if (e.type !== 'sleep' || !e.endedAt) continue;
       const st = new Date(e.startedAt), en = new Date(e.endedAt);
-      for (let d = sod(st); d <= en; d = new Date(+d + DAY)) {
+      for (let d = sod(st); +d <= +en; d = nextDay(d)) {
         const i = dayIdx[key(d)];
+        const dEnd = nextDay(d);
         if (i === undefined) continue;
-        const from = Math.max(+st, +d), to = Math.min(+en, +d + DAY);
-        if (to <= from) continue;
-        const yy = y((from - +d) / 36e5), hh = Math.max(2, y((to - from) / 36e5) - PT);
+        const h0 = wallHours(Math.max(+st, +d), d, dEnd);
+        const h1 = wallHours(Math.min(+en, +dEnd), d, dEnd);
+        if (h1 <= h0) continue;
+        const yy = y(h0), hh = Math.max(2, y(h1) - y(h0));
         s += `<rect x="${dx(i)}" y="${yy.toFixed(1)}" width="${barW}" height="${hh.toFixed(1)}" rx="${Math.min(3, barW / 2)}" fill="${C.sleep}" opacity="${e.details.kind === 'night' ? 0.95 : 0.65}"/>`;
       }
     }
@@ -155,19 +174,21 @@ const Trends = (() => {
       s += `<line x1="${x(h)}" y1="10" x2="${x(h)}" y2="${H - 14}" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>`;
       s += axisText(x(h), H - 3, ['12a', '6a', '12p', '6p', '12a'][h / 6]);
     });
-    const d0 = +sod(day), d1 = d0 + DAY;
+    const dayStart = sod(day), dayEnd = nextDay(dayStart);
+    const d0 = +dayStart, d1 = +dayEnd;
     if (state.show.sleep) for (const e of events) {
       if (e.type !== 'sleep' || !e.endedAt) continue;
       const from = Math.max(+new Date(e.startedAt), d0), to = Math.min(+new Date(e.endedAt), d1);
       if (to <= from) continue;
-      s += `<rect x="${x((from - d0) / 36e5).toFixed(1)}" y="${laneY.sleep}" width="${Math.max(2, x((to - from) / 36e5) - AX).toFixed(1)}" height="18" rx="3" fill="${C.sleep}" opacity="${e.details.kind === 'night' ? 0.95 : 0.65}"/>`;
+      const h0 = wallHours(from, dayStart, dayEnd), h1 = wallHours(to, dayStart, dayEnd);
+      s += `<rect x="${x(h0).toFixed(1)}" y="${laneY.sleep}" width="${Math.max(2, x(h1) - x(h0)).toFixed(1)}" height="18" rx="3" fill="${C.sleep}" opacity="${e.details.kind === 'night' ? 0.95 : 0.65}"/>`;
     }
     const dots = (type, color, yy) => {
       for (const e of events) {
         if (e.type !== type) continue;
         const t = +new Date(e.startedAt);
         if (t < d0 || t >= d1) continue;
-        s += `<circle cx="${x((t - d0) / 36e5).toFixed(1)}" cy="${yy}" r="4" fill="${color}" stroke="rgba(10,13,38,0.9)" stroke-width="2"/>`;
+        s += `<circle cx="${x(wallHours(t, dayStart, dayEnd)).toFixed(1)}" cy="${yy}" r="4" fill="${color}" stroke="rgba(10,13,38,0.9)" stroke-width="2"/>`;
       }
     };
     if (state.show.feed) dots('feed', C.feed, laneY.feed + 8);
@@ -376,5 +397,9 @@ const Trends = (() => {
     });
   }
 
-  return { render };
+  return {
+    render,
+    // exposed for regression tests only — not called by UI code
+    _test: { metrics, rangeDays, nightOf, wallHours, state },
+  };
 })();

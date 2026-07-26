@@ -69,6 +69,7 @@
     const running = Store.getRunning();
     const settings = Store.getSettings();
     const events = await Store.getEvents();
+    renderedEvents = events;
     const now = new Date();
 
     // today's sleep events for suggestion inputs
@@ -544,14 +545,114 @@
       </div>`;
   }
 
+  let renderedEvents = [];
+
   function bindRowDeletes() {
-    view.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
+    view.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async ev => {
+      ev.stopPropagation();
       if (confirm('Delete this entry?')) await Store.deleteEvent(b.dataset.del);
     }));
+    view.querySelectorAll('.event-row[data-id]').forEach(r => r.addEventListener('click', () => {
+      const evt = renderedEvents.find(x => x.id === r.dataset.id);
+      if (evt && evt.endedAt !== undefined) openEditSheet(evt);
+    }));
+  }
+
+  // ---------- edit event ----------
+  const toLocalInput = iso => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  function openEditSheet(e) {
+    const isSleep = e.type === 'sleep';
+    const isDiaper = e.type === 'diaper';
+    const isBreast = e.type === 'feed' && e.details.method === 'breast';
+    const isBottle = e.type === 'feed' && e.details.method === 'bottle';
+    const title = isSleep ? (e.details.kind === 'night' ? 'night sleep' : 'nap')
+      : isDiaper ? 'diaper' : isBottle ? 'bottle' : 'nursing session';
+
+    openSheet(`
+      <h3>Edit ${title}</h3>
+      ${isSleep ? `
+        <div class="choice-row">
+          <button class="choice ${e.details.kind === 'nap' ? 'selected' : ''}" data-kind="nap">Nap</button>
+          <button class="choice ${e.details.kind === 'night' ? 'selected' : ''}" data-kind="night">Night sleep</button>
+        </div>` : ''}
+      ${isDiaper ? `
+        <div class="choice-row">
+          <button class="choice ${e.details.kind === 'wet' ? 'selected' : ''}" data-kind="wet">${Icon('drop', 'ic-choice')}Wet</button>
+          <button class="choice ${e.details.kind === 'dirty' ? 'selected' : ''}" data-kind="dirty">${Icon('swirl', 'ic-choice')}Dirty</button>
+          <button class="choice ${e.details.kind === 'both' ? 'selected' : ''}" data-kind="both">${Icon('both', 'ic-choice')}Both</button>
+        </div>` : ''}
+      <label class="field">${isSleep || isBreast ? 'Start' : 'Time'}
+        <input type="datetime-local" id="ed-start" value="${toLocalInput(e.startedAt)}">
+      </label>
+      ${isSleep || isBreast ? `
+        <label class="field">End
+          <input type="datetime-local" id="ed-end" value="${toLocalInput(e.endedAt)}">
+        </label>` : ''}
+      ${isBreast ? `
+        <div class="choice-row">
+          <label class="field" style="flex:1">Left (minutes)
+            <input type="number" id="ed-left" min="0" max="120" step="1" value="${Math.round((e.details.leftSec || 0) / 60)}">
+          </label>
+          <label class="field" style="flex:1">Right (minutes)
+            <input type="number" id="ed-right" min="0" max="120" step="1" value="${Math.round((e.details.rightSec || 0) / 60)}">
+          </label>
+        </div>` : ''}
+      ${isBottle ? `
+        <label class="field">Ounces
+          <input type="number" id="ed-oz" min="0.5" max="16" step="0.5" value="${e.details.oz || 4}">
+        </label>` : ''}
+      <div id="ed-err" class="edit-err hidden"></div>
+      <button class="btn" id="ed-save">Save changes</button>
+      <button class="btn danger" id="ed-delete">Delete entry</button>
+    `);
+
+    let kind = e.details.kind;
+    sheet.querySelectorAll('[data-kind]').forEach(b => b.addEventListener('click', () => {
+      kind = b.dataset.kind;
+      sheet.querySelectorAll('[data-kind]').forEach(x => x.classList.toggle('selected', x === b));
+    }));
+
+    document.getElementById('ed-save').addEventListener('click', async () => {
+      const start = new Date(document.getElementById('ed-start').value);
+      const endEl = document.getElementById('ed-end');
+      const end = endEl ? new Date(endEl.value) : start;
+      const details = { ...e.details };
+      if (isSleep || isDiaper) details.kind = kind;
+      if (isBreast) {
+        details.leftSec = Math.round((parseFloat(document.getElementById('ed-left').value) || 0) * 60);
+        details.rightSec = Math.round((parseFloat(document.getElementById('ed-right').value) || 0) * 60);
+      }
+      if (isBottle) details.oz = parseFloat(document.getElementById('ed-oz').value);
+      const patch = {
+        startedAt: isNaN(+start) ? 'invalid' : start.toISOString(),
+        endedAt: isNaN(+end) ? 'invalid' : end.toISOString(),
+        details,
+      };
+      const err = Store.validateEvent({ ...e, ...patch });
+      if (err) {
+        const el = document.getElementById('ed-err');
+        el.textContent = err;
+        el.classList.remove('hidden');
+        return;
+      }
+      await Store.updateEvent(e.id, patch);
+      closeSheet();
+    });
+    document.getElementById('ed-delete').addEventListener('click', async () => {
+      if (confirm('Delete this entry?')) {
+        await Store.deleteEvent(e.id);
+        closeSheet();
+      }
+    });
   }
 
   async function renderHistory() {
     const events = await Store.getEvents();
+    renderedEvents = events;
     if (!events.length) {
       view.innerHTML = `<h1>History</h1><div class="subtitle">Nothing logged yet.</div>`;
       return;
